@@ -1,0 +1,32 @@
+#!/usr/bin/env python3
+import sys
+import os
+import marshal
+import types
+import importlib
+
+def main():
+    if len(sys.argv) < 2:
+        print("Usage: kethaka <bytecode_file.kbc>")
+        sys.exit(1)
+        
+    bytecode_file = sys.argv[1]
+    if not bytecode_file.endswith('.kbc'):
+        print("Error: Bytecode file must have .kbc extension")
+        sys.exit(1)
+        
+    try:
+        # Load and execute the bytecode
+        with open(bytecode_file, 'rb') as f:
+            code = marshal.load(f)
+            
+        # Create a new module to execute the code
+        module = types.ModuleType('kethaka_program')
+        exec(code, module.__dict__)
+        
+    except Exception as e:
+        print(f"Runtime error: {str(e)}")
+        sys.exit(1)
+
+if __name__ == "__main__":
+    main()
