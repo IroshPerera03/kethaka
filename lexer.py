@@ -10,7 +10,7 @@ TOKEN_SPEC = [
     ('FOR', r'දක්වා'),          # For loop
     ('FUNCTION', r'ක්‍රියාව'),    # Function declaration
     ('RETURN', r'ආපසු'),        # Return statement
-    ('IDENTIFIER', r'[a-zA-Zа-яА-Я_\u0D80-\u0DFF][a-zA-Zа-яА-Я0-9_\u0D80-\u0DFF]*'),  # Support Sinhala identifiers
+    ('IDENTIFIER', r'[a-zA-Z0-9_\u0D80-\u0DFF\u200d]+'),  # Support Sinhala identifiers with ZWJ and underscores
     ('OP', r'[+\-*/]'),         # Arithmetic operators
     ('COMPARE', r'[<>]=?|==|!='),  # Comparison operators
     ('ASSIGN', r'='),           # Assignment operator
@@ -47,7 +47,3 @@ def lexer(code):
             raise SyntaxError(f"Invalid character '{code[pos]}' at line {line_num}")
             
     return tokens
-
-code = "සඳහන් x = 10; නම් (x > 5) { මුද්‍රණය('අංකය විශාලයි!'); } # This is a comment"
-tokens = lexer(code)
-print(tokens)

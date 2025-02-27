@@ -1,8 +1,8 @@
+import ast as py_ast
+from parser import parse
 from lexer import lexer
-from parser import parse, PrintStatement, IfStatement, ForLoop, Function, ReturnStatement, Number, StringLiteral, Variable, BinaryOperation, FunctionCall
 import marshal
 import types
-import ast as py_ast
 from typing import List, Any
 
 class CodeGenerator(py_ast.NodeVisitor):
@@ -57,101 +57,113 @@ class CodeGenerator(py_ast.NodeVisitor):
         for stmt in node.body:
             self.visit(stmt)
 
-def ast_to_python_ast(node: Any) -> py_ast.AST:
-    if isinstance(node, tuple):  # Variable declaration
-        return py_ast.Assign(
-            targets=[py_ast.Name(id=node[0], ctx=py_ast.Store())],
-            value=ast_to_python_ast(node[1])
-        )
-    elif isinstance(node, PrintStatement):
-        return py_ast.Expr(
-            value=py_ast.Call(
-                func=py_ast.Name(id='print', ctx=py_ast.Load()),
-                args=[ast_to_python_ast(node.expression)],
-                keywords=[]
+def ast_to_python_ast(node):
+    if isinstance(node, dict):
+        if node['type'] == 'var_declaration':
+            return py_ast.Assign(
+                targets=[py_ast.Name(id=node['name'], ctx=py_ast.Store())],
+                value=py_ast.Constant(value=node['value'])
             )
-        )
-    elif isinstance(node, IfStatement):
-        return py_ast.If(
-            test=ast_to_python_ast(node.condition),
-            body=[ast_to_python_ast(stmt) for stmt in node.body],
-            orelse=[ast_to_python_ast(stmt) for stmt in (node.else_body or [])]
-        )
-    elif isinstance(node, Function):
-        return py_ast.FunctionDef(
-            name=node.name,
-            args=py_ast.arguments(
-                args=[py_ast.arg(arg=param) for param in node.parameters],
-                posonlyargs=[],
-                kwonlyargs=[],
-                kw_defaults=[],
-                defaults=[]
-            ),
-            body=[ast_to_python_ast(stmt) for stmt in node.body],
-            decorator_list=[]
-        )
-    elif isinstance(node, ReturnStatement):
-        return py_ast.Return(value=ast_to_python_ast(node.expression))
-    elif isinstance(node, Number):
-        return py_ast.Constant(value=int(node.value))
-    elif isinstance(node, StringLiteral):
-        return py_ast.Constant(value=node.value)
-    elif isinstance(node, Variable):
-        return py_ast.Name(id=node.name, ctx=py_ast.Load())
-    elif isinstance(node, BinaryOperation):
-        if node.operator in ['<', '>', '<=', '>=', '==', '!=']:
-            return py_ast.Compare(
-                left=ast_to_python_ast(node.left),
-                ops=[py_ast.Gt() if node.operator == '>' else
-                     py_ast.Lt() if node.operator == '<' else
-                     py_ast.GtE() if node.operator == '>=' else
-                     py_ast.LtE() if node.operator == '<=' else
-                     py_ast.Eq() if node.operator == '==' else
-                     py_ast.NotEq()],
-                comparators=[ast_to_python_ast(node.right)]
+        elif node['type'] == 'function_definition':
+            return py_ast.FunctionDef(
+                name=node['name'],
+                args=py_ast.arguments(
+                    posonlyargs=[],
+                    args=[py_ast.arg(arg=arg) for arg in node['params']],
+                    kwonlyargs=[],
+                    kw_defaults=[],
+                    defaults=[]
+                ),
+                body=[ast_to_python_ast(stmt) for stmt in node['body']],
+                decorator_list=[]
             )
+        elif node['type'] == 'print_statement':
+            return py_ast.Expr(
+                value=py_ast.Call(
+                    func=py_ast.Name(id='print', ctx=py_ast.Load()),
+                    args=[py_ast.Name(id=node['value'], ctx=py_ast.Load()) if isinstance(node['value'], str) else py_ast.Constant(value=node['value'])],
+                    keywords=[]
+                )
+            )
+        elif node['type'] == 'function_call':
+            return py_ast.Expr(
+                value=py_ast.Call(
+                    func=py_ast.Name(id=node['name'], ctx=py_ast.Load()),
+                    args=[py_ast.Name(id=arg, ctx=py_ast.Load()) for arg in node['args']],
+                    keywords=[]
+                )
+            )
+        elif node['type'] == 'if_statement':
+            return py_ast.If(
+                test=ast_to_python_ast(node['condition']),
+                body=[ast_to_python_ast(stmt) for stmt in node['body']],
+                orelse=[ast_to_python_ast(stmt) for stmt in (node['else_body'] or [])]
+            )
+        elif node['type'] == 'binary_operation':
+            if node['operator'] in ['<', '>', '<=', '>=', '==', '!=']:
+                return py_ast.Compare(
+                    left=ast_to_python_ast(node['left']),
+                    ops=[py_ast.Gt() if node['operator'] == '>' else
+                         py_ast.Lt() if node['operator'] == '<' else
+                         py_ast.GtE() if node['operator'] == '>=' else
+                         py_ast.LtE() if node['operator'] == '<=' else
+                         py_ast.Eq() if node['operator'] == '==' else
+                         py_ast.NotEq()],
+                    comparators=[ast_to_python_ast(node['right'])]
+                )
+            else:
+                return py_ast.BinOp(
+                    left=ast_to_python_ast(node['left']),
+                    op=py_ast.Add() if node['operator'] == '+' else
+                       py_ast.Sub() if node['operator'] == '-' else
+                       py_ast.Mult() if node['operator'] == '*' else
+                       py_ast.Div(),
+                    right=ast_to_python_ast(node['right'])
+                )
+        elif node['type'] == 'number':
+            return py_ast.Constant(value=node['value'])
+        elif node['type'] == 'string_literal':
+            return py_ast.Constant(value=node['value'])
+        elif node['type'] == 'variable':
+            return py_ast.Name(id=node['name'], ctx=py_ast.Load())
+        elif node['type'] == 'return_statement':
+            return py_ast.Return(value=ast_to_python_ast(node['value']))
         else:
-            return py_ast.BinOp(
-                left=ast_to_python_ast(node.left),
-                op=py_ast.Add() if node.operator == '+' else
-                   py_ast.Sub() if node.operator == '-' else
-                   py_ast.Mult() if node.operator == '*' else
-                   py_ast.Div(),
-                right=ast_to_python_ast(node.right)
-            )
-    elif isinstance(node, FunctionCall):
-        return py_ast.Call(
-            func=py_ast.Name(id=node.name, ctx=py_ast.Load()),
-            args=[ast_to_python_ast(arg) for arg in node.arguments],
-            keywords=[]
-        )
+            raise ValueError(f"Unknown node type: {node['type']}")
     else:
         raise ValueError(f"Unknown node type: {type(node)}")
 
 def compile_to_bytecode(source_file: str, output_file: str) -> None:
-    # Read source code
-    with open(source_file, 'r', encoding='utf-8') as f:
-        source_code = f.read()
+    try:
+        # Read source code
+        with open(source_file, 'r', encoding='utf-8') as f:
+            source_code = f.read()
+            
+        # Generate tokens
+        tokens = lexer(source_code)
+        print(f"Tokens generated from {source_file}:", tokens)
         
-    # Generate tokens
-    tokens = lexer(source_code)
-    
-    # Parse tokens into AST
-    kethaka_ast = parse(tokens, source_code)
-    
-    # Convert Kethaka AST to Python AST
-    python_ast_nodes = [ast_to_python_ast(node) for node in kethaka_ast]
-    module = py_ast.Module(body=python_ast_nodes, type_ignores=[])
-    
-    # Add line numbers and parent references
-    module = py_ast.fix_missing_locations(module)
-    
-    # Compile to bytecode
-    code = compile(module, source_file, 'exec')
-    
-    # Save bytecode
-    with open(output_file, 'wb') as f:
-        marshal.dump(code, f)
+        # Parse tokens into AST
+        kethaka_ast = parse(tokens, source_code)
+        print("AST:", kethaka_ast)
+        
+        # Convert Kethaka AST to Python AST
+        python_ast_nodes = [ast_to_python_ast(node) for node in kethaka_ast]
+        module = py_ast.Module(body=python_ast_nodes, type_ignores=[])
+        
+        # Add line numbers and parent references
+        module = py_ast.fix_missing_locations(module)
+        
+        # Compile to bytecode
+        code = compile(module, source_file, 'exec')
+        
+        # Save bytecode
+        with open(output_file, 'wb') as f:
+            marshal.dump(code, f)
+            
+    except Exception as e:
+        print(f"Error compiling {source_file}: {str(e)}")
+        raise
 
 if __name__ == "__main__":
     import sys
